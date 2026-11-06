@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { crear, listar, solicitar, abrir } = require('../controllers/secretos.controller');
+const { crear, listar, solicitar, abrir, revelar } = require('../controllers/secretos.controller');
 const { httpError } = require('../utils/httpError');
 
 const router = Router();
@@ -9,6 +9,7 @@ router.post('/', crear);
 router.get('/', listar);
 router.post('/:id/solicitar', solicitar);
 router.get('/:id/abrir', abrir);
+router.get('/:id/revelar', revelar);
 
 // Express lanza URIError si el :id trae un % mal codificado, antes de llegar al
 // controller. Para el contrato es un id inválido: 404, sin repetir su mensaje interno.

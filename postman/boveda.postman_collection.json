@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "La Bóveda",
-    "description": "Flujo completo de la API de secretos. Córrela completa y en orden con el Collection Runner, con la API levantada. Cada corrida deja 4 cuentas `@prueba.local` y un secreto `PRUEBA ...` en las bases.",
+    "description": "Flujo completo de la API de secretos. Córrela completa y en orden con el Collection Runner, con la API levantada. Cada corrida deja 4 cuentas `@prueba.local` y un secreto `PRUEBA ...` en las bases. Fase 2: defensa de cuentas posteriores al secreto y tokens de revelación de un solo uso.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -22,7 +22,7 @@
                   "pm.collectionVariables.set('sufijo', sufijo);",
                   "",
                   "// Se limpia la corrida anterior para que un login fallido no reutilice un token viejo.",
-                  "['idA', 'tokenA', 'tokenB', 'tokenC', 'tokenD', 'secretoId'].forEach((nombre) => {",
+                  "['idA', 'tokenA', 'tokenB', 'tokenC', 'tokenD', 'tokenRevelar', 'secretoId'].forEach((nombre) => {",
                   "  pm.collectionVariables.set(nombre, '');",
                   "});"
                 ]
@@ -941,8 +941,12 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Responde 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Devuelve el contenido correcto', () => {",
-                  "  pm.expect(pm.response.json().contenido).to.eql('Contenido de prueba ' + pm.collectionVariables.get('sufijo'));",
+                  "pm.test('Entrega un token de un solo uso, no el contenido', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.tokenRevelar).to.be.a('string');",
+                  "  pm.expect(json.expiraEn).to.eql(60);",
+                  "  pm.expect(json).to.not.have.property('contenido');",
+                  "  pm.collectionVariables.set('tokenRevelar', json.tokenRevelar);",
                   "});"
                 ]
               }
@@ -970,6 +974,228 @@
                 "secretos",
                 "{{secretoId}}",
                 "abrir"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "B revela el secreto (primer uso)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200: el token se canjea', () => pm.response.to.have.status(200));",
+                  "pm.test('Devuelve el contenido', () => pm.expect(pm.response.json().contenido).to.eql('Contenido de prueba ' + pm.collectionVariables.get('sufijo')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Token-Revelar",
+                "value": "{{tokenRevelar}}"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenB}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/{{secretoId}}/revelar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "{{secretoId}}",
+                "revelar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "B intenta reutilizar el token (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403: el token ya se usó', () => pm.response.to.have.status(403));",
+                  "pm.test('Error seguro', () => pm.expect(pm.response.json().error).to.eql('Token ya utilizado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Token-Revelar",
+                "value": "{{tokenRevelar}}"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenB}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/{{secretoId}}/revelar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "{{secretoId}}",
+                "revelar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "C intenta revelar con token de B (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401: el token es de otro usuario', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Token-Revelar",
+                "value": "{{tokenRevelar}}"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenC}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/{{secretoId}}/revelar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "{{secretoId}}",
+                "revelar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Token de sesión no sirve para revelar (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401: no acepta JWT de sesión', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Token-Revelar",
+                "value": "{{tokenB}}"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenB}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/{{secretoId}}/revelar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "{{secretoId}}",
+                "revelar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revelar sin token especial (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401: exige X-Token-Revelar', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenB}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/{{secretoId}}/revelar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "{{secretoId}}",
+                "revelar"
               ]
             }
           },
@@ -1302,6 +1528,51 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Revelar con id inválido (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404: id inválido', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Token-Revelar",
+                "value": "{{tokenRevelar}}"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenB}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/abc/revelar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "abc",
+                "revelar"
+              ]
+            }
+          },
+          "response": []
         }
       ]
     }
@@ -1344,6 +1615,11 @@
     },
     {
       "key": "secretoId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tokenRevelar",
       "value": "",
       "type": "string"
     }

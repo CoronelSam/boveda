@@ -1,4 +1,10 @@
+const crypto = require('node:crypto');
+const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const { Op } = require('sequelize');
+const env = require('../config/env');
+const Usuario = require('../models/Usuario');
+const TokenUsado = require('../models/TokenUsado');
 const Secreto = require('../models/Secreto');
 const {
   evaluarApertura,
@@ -12,7 +18,7 @@ const TITULO_MAX = 200;
 const CONTENIDO_MAX = 5000;
 
 // Lo único que necesita la regla de apertura. Nunca incluye contenido.
-const CAMPOS_REGLA = 'creadoPor fechaApertura solicitudes';
+const CAMPOS_REGLA = 'creadoPor fechaApertura solicitudes createdAt';
 
 // Date.parse por sí solo acepta formatos como "March 7"; aquí se exige ISO 8601.
 const FECHA_ISO =
@@ -58,12 +64,27 @@ async function buscarSecreto(id, campos) {
   return secreto;
 }
 
+// Una cuenta registrada después de la creación del secreto no puede formar quórum.
+// Se obtiene la elegibilidad de MySQL, no de campos enviados por el cliente.
+async function obtenerElegibles(secreto, ahora) {
+  const vigentes = agentesVigentes(secreto, ahora);
+  if (vigentes.size === 0) return new Set();
+  const usuarios = await Usuario.findAll({
+    attributes: ['id'],
+    where: {
+      id: { [Op.in]: [...vigentes] },
+      createdAt: { [Op.lt]: secreto.createdAt },
+    },
+  });
+  return new Set(usuarios.map((usuario) => usuario.id));
+}
+
 function explicarCierre(vigentes) {
   const minutos = VENTANA_MS / 60000;
   const hay = vigentes === 1 ? 'Hay 1 vigente' : `Hay ${vigentes} vigentes`;
   return (
-    `Se necesitan solicitudes de ${QUORUM} agentes distintos (sin contar al creador) ` +
-    `en los últimos ${minutos} minutos, y tú debes ser uno de ellos. ${hay}.`
+    `Se necesitan solicitudes de ${QUORUM} agentes distintos (sin contar al creador ni a cuentas ` +
+    `creadas después del secreto) en los últimos ${minutos} minutos, y tú debes ser uno de ellos. ${hay}.`
   );
 }
 
@@ -135,7 +156,9 @@ async function solicitar(req, res) {
 
   // Se relee para contar también lo que dejaron las peticiones en paralelo.
   const actualizado = await buscarSecreto(id, CAMPOS_REGLA);
-  const vigentes = agentesVigentes(actualizado, new Date()).size;
+  const momento = new Date();
+  const elegibles = await obtenerElegibles(actualizado, momento);
+  const vigentes = agentesVigentes(actualizado, momento, elegibles).size;
 
   res.json({
     mensaje: 'Solicitud registrada',
@@ -148,7 +171,9 @@ async function abrir(req, res) {
   const { id } = req.params;
 
   const secreto = await buscarSecreto(id, CAMPOS_REGLA);
-  const resultado = evaluarApertura(secreto, req.usuario.id, new Date());
+  const ahora = new Date();
+  const elegibles = await obtenerElegibles(secreto, ahora);
+  const resultado = evaluarApertura(secreto, req.usuario.id, ahora, elegibles);
 
   if (!resultado.abierto) {
     return res.status(403).json({
@@ -159,8 +184,49 @@ async function abrir(req, res) {
     });
   }
 
-  const { contenido } = await buscarSecreto(id, '+contenido');
-  res.json({ contenido });
+  // No se carga ni se devuelve contenido en /abrir.
+  const tokenRevelar = jwt.sign(
+    { tipo: 'revelar', sid: String(secreto._id), uid: req.usuario.id },
+    env.JWT_REVELAR_SECRET,
+    { expiresIn: '60s', algorithm: 'HS256', jwtid: crypto.randomUUID() },
+  );
+  res.json({ tokenRevelar, expiraEn: 60 });
 }
 
-module.exports = { crear, listar, solicitar, abrir };
+async function revelar(req, res) {
+  const { id } = req.params;
+  // Incluso con un token, un identificador inválido nunca llega a Mongo.
+  if (!mongoose.isValidObjectId(id)) throw httpError(404, 'Secreto no encontrado');
+
+  const token = req.get('X-Token-Revelar');
+  let payload;
+  try {
+    if (typeof token !== 'string' || token.length === 0) throw new Error('Falta token');
+    payload = jwt.verify(token, env.JWT_REVELAR_SECRET, { algorithms: ['HS256'] });
+  } catch {
+    throw httpError(401, 'Token de revelación inválido o expirado');
+  }
+
+  if (
+    payload.tipo !== 'revelar' ||
+    payload.sid !== id ||
+    payload.uid !== req.usuario.id ||
+    typeof payload.jti !== 'string' ||
+    payload.jti.length === 0 ||
+    typeof payload.exp !== 'number'
+  ) {
+    throw httpError(401, 'Token de revelación inválido o expirado');
+  }
+
+  // Comprobar existencia antes de consumir el token (el contenido sigue protegido).
+  const secreto = await buscarSecreto(id, '+contenido');
+  try {
+    await TokenUsado.create({ jti: payload.jti, expiraEn: new Date(payload.exp * 1000) });
+  } catch (err) {
+    if (err.code === 11000) throw httpError(403, 'Token ya utilizado');
+    throw err;
+  }
+  res.json({ contenido: secreto.contenido });
+}
+
+module.exports = { crear, listar, solicitar, abrir, revelar, obtenerElegibles };

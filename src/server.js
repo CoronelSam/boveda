@@ -3,6 +3,7 @@ const env = require('./config/env');
 const app = require('./app');
 const sequelize = require('./config/mysql');
 const { conectarMongo } = require('./config/mongo');
+const TokenUsado = require('./models/TokenUsado');
 
 async function iniciar() {
   await sequelize.authenticate();
@@ -10,6 +11,7 @@ async function iniciar() {
   console.log('MySQL conectado');
 
   const conexion = await conectarMongo();
+  await TokenUsado.init(); // Garantiza índice único de jti antes de escuchar peticiones.
   console.log(`MongoDB conectado (base: ${conexion.name})`);
 
   app.listen(env.PORT, '0.0.0.0', (err) => {

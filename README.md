@@ -118,7 +118,8 @@ Todas las respuestas son JSON. Los errores siempre tienen la forma `{ "error": "
 | `POST` | `/secretos` | Bearer | `{ titulo, contenido, fechaApertura? }`: `titulo` y `contenido` son strings no vacíos; `fechaApertura` es una fecha ISO. Cualquier otro campo se ignora | **201** `{ id, titulo, fechaApertura, creadoPor }`, sin contenido<br>**400** datos inválidos<br>**401** token inválido |
 | `GET` | `/secretos` | Bearer | Ninguno | **200** `[{ id, titulo, fechaApertura, numSolicitudes }]`<br>**401** token inválido |
 | `POST` | `/secretos/:id/solicitar` | Bearer | Ninguno; si llega, se ignora | **200** `{ mensaje, solicitudesVigentes, faltan }`<br>**401** token inválido<br>**403** `El creador no cuenta para el quórum`<br>**404** no existe o id mal formado |
-| `GET` | `/secretos/:id/abrir` | Bearer | Ninguno | **200** `{ contenido }`<br>**401** token inválido<br>**403** regla no cumplida, explicando qué falta<br>**404** no existe o id mal formado |
+| `GET` | `/secretos/:id/abrir` | Bearer | Ninguno | **200** `{ tokenRevelar, expiraEn: 60 }`, sin contenido<br>**401** token inválido<br>**403** regla no cumplida, explicando qué falta<br>**404** no existe o id mal formado |
+| `GET` | `/secretos/:id/revelar` | Bearer y header `X-Token-Revelar` | Ninguno | **200** `{ contenido }`, una sola vez<br>**401** token inválido, vencido, de otra cuenta o de otro secreto<br>**403** `Token ya utilizado`<br>**404** no existe o id mal formado |
 
 Si un agente solicita de nuevo, se renueva la fecha de su solicitud y no se crea otra.
 
@@ -128,7 +129,7 @@ Ejemplo de 403 en `/abrir`:
 {
   "error": "El secreto sigue cerrado",
   "faltan": 1,
-  "detalle": "Se necesitan solicitudes de 2 agentes distintos (sin contar al creador) en los últimos 5 minutos, y tú debes ser uno de ellos. Hay 1 vigente.",
+  "detalle": "Se necesitan solicitudes de 2 agentes distintos (sin contar al creador ni a cuentas creadas después del secreto) en los últimos 5 minutos, y tú debes ser uno de ellos. Hay 1 vigente.",
   "fechaApertura": "2026-11-03T20:00:00.000Z"
 }
 ```
@@ -223,9 +224,33 @@ Al atacar a otro equipo:
 - Están prohibidos la denegación de servicio, los scripts que saturen el servidor y borrar datos.
 - Documenta en [`ATRACO.md`](ATRACO.md) los pasos exactos de lo que funcione: un ataque exitoso y bien explicado da +5%.
 
-## Pendiente (fase 2)
+## Fase 2 — defensa y bonus implementados
 
-Estas dos partes **aún no están implementadas**:
+La Fase 2 conserva los endpoints originales y modifica el comportamiento de `GET /secretos/:id/abrir`.
 
-- **Defensa contra cuentas desechables.** El registro es abierto, así que hoy un atacante puede crear dos cuentas nuevas, solicitar el secreto con ambas y abrirlo. La defensa prevista es que solo cuenten para el quórum las cuentas creadas antes que el secreto. Cuando exista, en la demo habrá que registrar a los agentes antes de crear el secreto.
-- **Token de un solo uso (bonus).** Hoy `/abrir` devuelve el contenido directamente. El endpoint `/secretos/:id/revelar` no existe todavía, y `JWT_REVELAR_SECRET` se exige en `.env` aunque aún no se use.
+### Defensa contra cuentas desechables
+
+Solo las cuentas cuya fecha `usuarios.createdAt` en MySQL sea **estrictamente anterior** a `secretos.createdAt` en MongoDB pueden formar el quórum. El servidor consulta MySQL y entrega la lista de cuentas elegibles al evaluador puro. Ni `userId` ni las fechas de las solicitudes se toman del cliente. La apertura por `fechaApertura` sigue funcionando aunque la cuenta sea nueva.
+
+**Orden obligatorio de la demostración:** registra A, B y C **antes** de crear el secreto. Si usas la colección de Postman actualizada, este orden ya está preparado. Las cuentas nuevas creadas después de un secreto existente no sirven para conseguir su quórum. Una cuenta creada antes sigue siendo un riesgo si el atacante controla sus credenciales: no equivale a una aprobación de identidad.
+
+### Revelación con token de un solo uso
+
+1. `GET /secretos/:id/abrir` con `Authorization: Bearer <tokenSesion>` comprueba el quórum o la hora y devuelve `{ "tokenRevelar": "...", "expiraEn": 60 }` (sin contenido).
+2. `GET /secretos/:id/revelar` exige **dos** headers: `Authorization: Bearer <tokenSesion>` y `X-Token-Revelar: <tokenRevelar>`. Devuelve `{ "contenido": "..." }` solo una vez.
+3. El token de revelación está firmado con `JWT_REVELAR_SECRET`, dura 60 segundos, está vinculado al usuario y al secreto y tiene `jti` único. La colección MongoDB `tokenusados` garantiza la invalidación atómica mediante índice único; el índice TTL elimina documentos expirados eventualmente.
+4. El segundo uso devuelve `403 Token ya utilizado`; un token inválido, vencido, de otra cuenta o de otro secreto devuelve `401`. El JWT de sesión no sirve en `X-Token-Revelar` ni el de revelar sirve como Bearer.
+
+### Ejecución y pruebas
+
+```bash
+pnpm install
+pnpm test
+pnpm dev
+```
+
+Importa `postman/boveda.postman_collection.json` en Postman. Ejecuta la colección completa en orden y revisa todos los tests, especialmente `B abre el secreto`, `B revela el secreto` y el intento de reutilización. La variable `baseUrl` inicia como `http://localhost:3001`.
+
+El servidor requiere `.env` local con las variables de `.env.example` y MySQL/MongoDB accesibles. Nunca compartas `.env` ni `node_modules` al entregar el ZIP. El índice único de `TokenUsado` se inicializa durante el arranque, antes de aceptar solicitudes.
+
+Las pruebas unitarias no sustituyen las verificaciones HTTP contra las dos bases reales. Revisa `AUDITORIA_FASE2.md` para las quince pruebas defensivas.

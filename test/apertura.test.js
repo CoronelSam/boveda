@@ -165,3 +165,23 @@ test('agentesVigentes da el conteo también cuando ya hay quórum', () => {
   });
   assert.deepEqual([...agentesVigentes(s, AHORA)], [A, B, C]);
 });
+
+
+test('cuentas creadas después del secreto no forman quórum', () => {
+  const s = secreto({ solicitudes: [solicitud(A), solicitud(B)] });
+  const r = evaluarApertura(s, A, AHORA, new Set([A]));
+  assert.equal(r.abierto, false);
+  assert.equal(r.faltan, 1);
+  assert.deepEqual([...agentesVigentes(s, AHORA, new Set([A]))], [A]);
+});
+
+test('dos agentes elegibles pueden abrir, un agente no elegible no', () => {
+  const s = secreto({ solicitudes: [solicitud(A), solicitud(B), solicitud(C)] });
+  assert.deepEqual(evaluarApertura(s, A, AHORA, new Set([A, B])), { abierto: true, via: 'quorum' });
+  assert.equal(evaluarApertura(s, C, AHORA, new Set([A, B])).abierto, false);
+});
+
+test('la apertura por tiempo no exige antigüedad de la cuenta', () => {
+  const s = secreto({ fechaApertura: haceMs(1000) });
+  assert.deepEqual(evaluarApertura(s, C, AHORA, new Set()), { abierto: true, via: 'tiempo' });
+});
