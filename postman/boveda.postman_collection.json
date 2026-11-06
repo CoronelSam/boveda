@@ -1,0 +1,1351 @@
+{
+  "info": {
+    "name": "La Bóveda",
+    "description": "Flujo completo de la API de secretos. Córrela completa y en orden con el Collection Runner, con la API levantada. Cada corrida deja 4 cuentas `@prueba.local` y un secreto `PRUEBA ...` en las bases.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Registro y login",
+      "description": "Registra e inicia sesión con los 4 agentes. Cada login guarda su token en una variable de colección.",
+      "item": [
+        {
+          "name": "Registro del agente A",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Valor único por corrida: evita que los emails choquen al repetir la colección.",
+                  "const sufijo = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);",
+                  "pm.collectionVariables.set('sufijo', sufijo);",
+                  "",
+                  "// Se limpia la corrida anterior para que un login fallido no reutilice un token viejo.",
+                  "['idA', 'tokenA', 'tokenB', 'tokenC', 'tokenD', 'secretoId'].forEach((nombre) => {",
+                  "  pm.collectionVariables.set(nombre, '');",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Devuelve id, nombre, email y rol de agente', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.id).to.be.a('number');",
+                  "  pm.expect(json.nombre).to.eql('Agente A');",
+                  "  pm.expect(json.email).to.eql('agente-a-' + pm.collectionVariables.get('sufijo') + '@prueba.local');",
+                  "  pm.expect(json.rol).to.eql('agente');",
+                  "});",
+                  "pm.test('No devuelve password', () => {",
+                  "  pm.expect(pm.response.json()).to.not.have.property('password');",
+                  "  pm.expect(pm.response.text()).to.not.include('clave-de-prueba-123');",
+                  "});",
+                  "",
+                  "pm.test('Guarda el id de A en idA', () => {",
+                  "  const { id } = pm.response.json();",
+                  "  pm.expect(id).to.be.a('number');",
+                  "  pm.collectionVariables.set('idA', id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Agente A\",\n  \"email\": \"agente-a-{{sufijo}}@prueba.local\",\n  \"password\": \"clave-de-prueba-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/registro",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "registro"
+              ]
+            },
+            "description": "Primer request: define un `sufijo` nuevo para esta corrida y limpia los valores de la anterior."
+          },
+          "response": []
+        },
+        {
+          "name": "Login del agente A",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Devuelve un token y lo guarda en tokenA', () => {",
+                  "  const { token } = pm.response.json();",
+                  "  pm.expect(token).to.be.a('string');",
+                  "  pm.expect(token.split('.').length).to.eql(3);",
+                  "  pm.collectionVariables.set('tokenA', token);",
+                  "});",
+                  "pm.test('No devuelve password', () => {",
+                  "  pm.expect(pm.response.json()).to.not.have.property('password');",
+                  "  pm.expect(pm.response.text()).to.not.include('clave-de-prueba-123');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"agente-a-{{sufijo}}@prueba.local\",\n  \"password\": \"clave-de-prueba-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Registro del agente B",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Devuelve id, nombre, email y rol de agente', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.id).to.be.a('number');",
+                  "  pm.expect(json.nombre).to.eql('Agente B');",
+                  "  pm.expect(json.email).to.eql('agente-b-' + pm.collectionVariables.get('sufijo') + '@prueba.local');",
+                  "  pm.expect(json.rol).to.eql('agente');",
+                  "});",
+                  "pm.test('No devuelve password', () => {",
+                  "  pm.expect(pm.response.json()).to.not.have.property('password');",
+                  "  pm.expect(pm.response.text()).to.not.include('clave-de-prueba-123');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Agente B\",\n  \"email\": \"agente-b-{{sufijo}}@prueba.local\",\n  \"password\": \"clave-de-prueba-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/registro",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "registro"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login del agente B",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Devuelve un token y lo guarda en tokenB', () => {",
+                  "  const { token } = pm.response.json();",
+                  "  pm.expect(token).to.be.a('string');",
+                  "  pm.expect(token.split('.').length).to.eql(3);",
+                  "  pm.collectionVariables.set('tokenB', token);",
+                  "});",
+                  "pm.test('No devuelve password', () => {",
+                  "  pm.expect(pm.response.json()).to.not.have.property('password');",
+                  "  pm.expect(pm.response.text()).to.not.include('clave-de-prueba-123');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"agente-b-{{sufijo}}@prueba.local\",\n  \"password\": \"clave-de-prueba-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Registro del agente C",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Devuelve id, nombre, email y rol de agente', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.id).to.be.a('number');",
+                  "  pm.expect(json.nombre).to.eql('Agente C');",
+                  "  pm.expect(json.email).to.eql('agente-c-' + pm.collectionVariables.get('sufijo') + '@prueba.local');",
+                  "  pm.expect(json.rol).to.eql('agente');",
+                  "});",
+                  "pm.test('No devuelve password', () => {",
+                  "  pm.expect(pm.response.json()).to.not.have.property('password');",
+                  "  pm.expect(pm.response.text()).to.not.include('clave-de-prueba-123');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Agente C\",\n  \"email\": \"agente-c-{{sufijo}}@prueba.local\",\n  \"password\": \"clave-de-prueba-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/registro",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "registro"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login del agente C",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Devuelve un token y lo guarda en tokenC', () => {",
+                  "  const { token } = pm.response.json();",
+                  "  pm.expect(token).to.be.a('string');",
+                  "  pm.expect(token.split('.').length).to.eql(3);",
+                  "  pm.collectionVariables.set('tokenC', token);",
+                  "});",
+                  "pm.test('No devuelve password', () => {",
+                  "  pm.expect(pm.response.json()).to.not.have.property('password');",
+                  "  pm.expect(pm.response.text()).to.not.include('clave-de-prueba-123');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"agente-c-{{sufijo}}@prueba.local\",\n  \"password\": \"clave-de-prueba-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Registro del agente D",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Devuelve id, nombre, email y rol de agente', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.id).to.be.a('number');",
+                  "  pm.expect(json.nombre).to.eql('Agente D');",
+                  "  pm.expect(json.email).to.eql('agente-d-' + pm.collectionVariables.get('sufijo') + '@prueba.local');",
+                  "  pm.expect(json.rol).to.eql('agente');",
+                  "});",
+                  "pm.test('No devuelve password', () => {",
+                  "  pm.expect(pm.response.json()).to.not.have.property('password');",
+                  "  pm.expect(pm.response.text()).to.not.include('clave-de-prueba-123');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Agente D\",\n  \"email\": \"agente-d-{{sufijo}}@prueba.local\",\n  \"password\": \"clave-de-prueba-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/registro",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "registro"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login del agente D",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Devuelve un token y lo guarda en tokenD', () => {",
+                  "  const { token } = pm.response.json();",
+                  "  pm.expect(token).to.be.a('string');",
+                  "  pm.expect(token.split('.').length).to.eql(3);",
+                  "  pm.collectionVariables.set('tokenD', token);",
+                  "});",
+                  "pm.test('No devuelve password', () => {",
+                  "  pm.expect(pm.response.json()).to.not.have.property('password');",
+                  "  pm.expect(pm.response.text()).to.not.include('clave-de-prueba-123');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"agente-d-{{sufijo}}@prueba.local\",\n  \"password\": \"clave-de-prueba-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Autenticación: casos negativos",
+      "description": "Email repetido y credenciales incorrectas.",
+      "item": [
+        {
+          "name": "Registro con email repetido da 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('El error tiene la forma { error }', () => {",
+                  "  pm.expect(pm.response.json().error).to.be.a('string');",
+                  "});",
+                  "pm.test('No devuelve password', () => {",
+                  "  pm.expect(pm.response.json()).to.not.have.property('password');",
+                  "  pm.expect(pm.response.text()).to.not.include('clave-de-prueba-123');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Agente A otra vez\",\n  \"email\": \"agente-a-{{sufijo}}@prueba.local\",\n  \"password\": \"clave-de-prueba-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/registro",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "registro"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login con password incorrecto da 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('El mensaje es genérico', () => {",
+                  "  pm.expect(pm.response.json().error).to.eql('Credenciales inválidas');",
+                  "});",
+                  "pm.test('No devuelve token', () => {",
+                  "  pm.expect(pm.response.json()).to.not.have.property('token');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"agente-a-{{sufijo}}@prueba.local\",\n  \"password\": \"clave-incorrecta-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login con email inexistente da 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('El mensaje es el mismo que con password incorrecto', () => {",
+                  "  pm.expect(pm.response.json().error).to.eql('Credenciales inválidas');",
+                  "});",
+                  "pm.test('No devuelve token', () => {",
+                  "  pm.expect(pm.response.json()).to.not.have.property('token');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nadie-{{sufijo}}@prueba.local\",\n  \"password\": \"clave-de-prueba-123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Flujo del secreto",
+      "description": "A crea el secreto; B y C forman el quórum y B lo abre. A es el creador y no cuenta para el quórum. La fecha de apertura es lejana para que solo pueda abrirse por quórum.",
+      "item": [
+        {
+          "name": "A crea un secreto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Devuelve el id como string y lo guarda en secretoId', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.id).to.be.a('string');",
+                  "  pm.expect(json).to.not.have.property('_id');",
+                  "  pm.collectionVariables.set('secretoId', json.id);",
+                  "});",
+                  "pm.test('Devuelve titulo y fechaApertura', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.titulo).to.eql('PRUEBA ' + pm.collectionVariables.get('sufijo'));",
+                  "  pm.expect(new Date(json.fechaApertura).toISOString()).to.eql('2099-01-01T00:00:00.000Z');",
+                  "});",
+                  "pm.test('creadoPor sale del token, no del body', () => {",
+                  "  pm.expect(pm.response.json().creadoPor).to.eql(Number(pm.collectionVariables.get('idA')));",
+                  "});",
+                  "pm.test('No devuelve contenido', () => {",
+                  "  pm.expect(pm.response.json()).to.not.have.property('contenido');",
+                  "});",
+                  "pm.test('No filtra el contenido del secreto', () => {",
+                  "  pm.expect(pm.response.text()).to.not.include('Contenido de prueba ' + pm.collectionVariables.get('sufijo'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"PRUEBA {{sufijo}}\",\n  \"contenido\": \"Contenido de prueba {{sufijo}}\",\n  \"fechaApertura\": \"2099-01-01T00:00:00.000Z\",\n  \"creadoPor\": 999999\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos"
+              ]
+            },
+            "description": "El body incluye `creadoPor` a propósito: debe ignorarse y usarse el id del token."
+          },
+          "response": []
+        },
+        {
+          "name": "Listar secretos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Ningún elemento trae contenido ni solicitudes', () => {",
+                  "  const lista = pm.response.json();",
+                  "  pm.expect(lista).to.be.an('array');",
+                  "  lista.forEach((secreto) => {",
+                  "    pm.expect(secreto).to.not.have.property('contenido');",
+                  "    pm.expect(secreto).to.not.have.property('solicitudes');",
+                  "  });",
+                  "});",
+                  "pm.test('Incluye el secreto creado, sin solicitudes todavía', () => {",
+                  "  const secreto = pm.response.json().find((s) => s.id === pm.collectionVariables.get('secretoId'));",
+                  "  pm.expect(secreto).to.be.an('object');",
+                  "  pm.expect(secreto.titulo).to.eql('PRUEBA ' + pm.collectionVariables.get('sufijo'));",
+                  "  pm.expect(new Date(secreto.fechaApertura).toISOString()).to.eql('2099-01-01T00:00:00.000Z');",
+                  "  pm.expect(secreto.numSolicitudes).to.eql(0);",
+                  "});",
+                  "pm.test('No filtra el contenido del secreto', () => {",
+                  "  pm.expect(pm.response.text()).to.not.include('Contenido de prueba ' + pm.collectionVariables.get('sufijo'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "B intenta abrir antes del quórum da 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 403', () => pm.response.to.have.status(403));",
+                  "pm.test('El error tiene la forma { error }', () => {",
+                  "  pm.expect(pm.response.json().error).to.be.a('string');",
+                  "});",
+                  "pm.test('Explica que faltan 2 solicitudes', () => {",
+                  "  pm.expect(pm.response.json().faltan).to.eql(2);",
+                  "});",
+                  "pm.test('No devuelve contenido', () => {",
+                  "  pm.expect(pm.response.json()).to.not.have.property('contenido');",
+                  "});",
+                  "pm.test('No filtra el contenido del secreto', () => {",
+                  "  pm.expect(pm.response.text()).to.not.include('Contenido de prueba ' + pm.collectionVariables.get('sufijo'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenB}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/{{secretoId}}/abrir",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "{{secretoId}}",
+                "abrir"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "B solicita",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Hay 1 solicitud vigente y falta 1', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.mensaje).to.be.a('string');",
+                  "  pm.expect(json.solicitudesVigentes).to.eql(1);",
+                  "  pm.expect(json.faltan).to.eql(1);",
+                  "});",
+                  "pm.test('No filtra el contenido del secreto', () => {",
+                  "  pm.expect(pm.response.text()).to.not.include('Contenido de prueba ' + pm.collectionVariables.get('sufijo'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenB}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/{{secretoId}}/solicitar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "{{secretoId}}",
+                "solicitar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "C solicita",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Hay 2 solicitudes vigentes y no falta ninguna', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.mensaje).to.be.a('string');",
+                  "  pm.expect(json.solicitudesVigentes).to.eql(2);",
+                  "  pm.expect(json.faltan).to.eql(0);",
+                  "});",
+                  "pm.test('No filtra el contenido del secreto', () => {",
+                  "  pm.expect(pm.response.text()).to.not.include('Contenido de prueba ' + pm.collectionVariables.get('sufijo'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenC}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/{{secretoId}}/solicitar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "{{secretoId}}",
+                "solicitar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "B abre el secreto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Devuelve el contenido correcto', () => {",
+                  "  pm.expect(pm.response.json().contenido).to.eql('Contenido de prueba ' + pm.collectionVariables.get('sufijo'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenB}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/{{secretoId}}/abrir",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "{{secretoId}}",
+                "abrir"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Secretos: casos negativos",
+      "description": "Corren con el quórum de B y C todavía vigente, así que un fallo de seguridad aquí abriría el secreto de verdad.",
+      "item": [
+        {
+          "name": "Abrir sin token da 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('El error tiene la forma { error }', () => {",
+                  "  pm.expect(pm.response.json().error).to.be.a('string');",
+                  "});",
+                  "pm.test('No filtra el contenido del secreto', () => {",
+                  "  pm.expect(pm.response.text()).to.not.include('Contenido de prueba ' + pm.collectionVariables.get('sufijo'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/{{secretoId}}/abrir",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "{{secretoId}}",
+                "abrir"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Abrir con token alterado da 401",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const partes = pm.collectionVariables.get('tokenB').split('.');",
+                  "partes[2] = (partes[2][0] === 'a' ? 'b' : 'a') + partes[2].slice(1);",
+                  "pm.variables.set('tokenAlterado', partes.join('.'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('El error tiene la forma { error }', () => {",
+                  "  pm.expect(pm.response.json().error).to.be.a('string');",
+                  "});",
+                  "pm.test('No filtra el contenido del secreto', () => {",
+                  "  pm.expect(pm.response.text()).to.not.include('Contenido de prueba ' + pm.collectionVariables.get('sufijo'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAlterado}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/{{secretoId}}/abrir",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "{{secretoId}}",
+                "abrir"
+              ]
+            },
+            "description": "Cambia el primer carácter de la firma del token de B, que sí forma parte del quórum."
+          },
+          "response": []
+        },
+        {
+          "name": "El creador solicita da 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Explica que el creador no cuenta', () => {",
+                  "  pm.expect(pm.response.json().error).to.eql('El creador no cuenta para el quórum');",
+                  "});",
+                  "pm.test('No filtra el contenido del secreto', () => {",
+                  "  pm.expect(pm.response.text()).to.not.include('Contenido de prueba ' + pm.collectionVariables.get('sufijo'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/{{secretoId}}/solicitar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "{{secretoId}}",
+                "solicitar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "D no solicitó e intenta abrir da 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 403', () => pm.response.to.have.status(403));",
+                  "pm.test('El error tiene la forma { error }', () => {",
+                  "  pm.expect(pm.response.json().error).to.be.a('string');",
+                  "});",
+                  "pm.test('No devuelve contenido', () => {",
+                  "  pm.expect(pm.response.json()).to.not.have.property('contenido');",
+                  "});",
+                  "pm.test('No filtra el contenido del secreto', () => {",
+                  "  pm.expect(pm.response.text()).to.not.include('Contenido de prueba ' + pm.collectionVariables.get('sufijo'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenD}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/{{secretoId}}/abrir",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "{{secretoId}}",
+                "abrir"
+              ]
+            },
+            "description": "Hay quórum de B y C, pero solo pueden abrir los agentes que lo forman."
+          },
+          "response": []
+        },
+        {
+          "name": "Abrir con id inválido da 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('El error tiene la forma { error }', () => {",
+                  "  pm.expect(pm.response.json().error).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenB}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/abc/abrir",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "abc",
+                "abrir"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Solicitar con id inválido da 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('El error tiene la forma { error }', () => {",
+                  "  pm.expect(pm.response.json().error).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenB}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/abc/solicitar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "abc",
+                "solicitar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Abrir un id válido que no existe da 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('El error tiene la forma { error }', () => {",
+                  "  pm.expect(pm.response.json().error).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenB}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/secretos/000000000000000000000000/abrir",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "secretos",
+                "000000000000000000000000",
+                "abrir"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "sufijo",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "idA",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tokenA",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tokenB",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tokenC",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tokenD",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "secretoId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

@@ -1,9 +1,34 @@
+const jwt = require('jsonwebtoken');
+const env = require('../config/env');
 const { httpError } = require('../utils/httpError');
 
-// Provisional (fase 0): rechaza todo hasta que el agente de Auth implemente
-// la verificación del JWT y deje req.usuario = { id, rol }.
+const FORMATO_BEARER = /^Bearer (\S+)$/;
+
+function verificarToken(token) {
+  try {
+    return jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] });
+  } catch {
+    return null;
+  }
+}
+
 function requireAuth(req, res, next) {
-  next(httpError(401, 'Autenticación no implementada'));
+  const coincidencia = FORMATO_BEARER.exec(req.headers.authorization ?? '');
+  const payload = coincidencia ? verificarToken(coincidencia[1]) : null;
+
+  // Los payloads con `tipo` son tokens del bonus, no de sesión.
+  if (
+    payload === null ||
+    typeof payload !== 'object' ||
+    !Number.isInteger(payload.id) ||
+    typeof payload.rol !== 'string' ||
+    'tipo' in payload
+  ) {
+    return next(httpError(401, 'No autorizado'));
+  }
+
+  req.usuario = { id: payload.id, rol: payload.rol };
+  next();
 }
 
 module.exports = { requireAuth };

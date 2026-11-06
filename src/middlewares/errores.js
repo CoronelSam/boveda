@@ -8,6 +8,11 @@ function manejadorErrores(err, req, res, next) {
     return next(err);
   }
 
+  // Solo los errores creados con httpError() llevan un mensaje pensado para el cliente.
+  if (err.esHttpError) {
+    return res.status(err.status).json({ error: err.message });
+  }
+
   // Errores de express.json(): no se reenvía el mensaje interno del parser.
   if (err.type === 'entity.parse.failed') {
     return res.status(400).json({ error: 'JSON inválido' });
@@ -16,9 +21,9 @@ function manejadorErrores(err, req, res, next) {
     return res.status(413).json({ error: 'El cuerpo de la petición es demasiado grande' });
   }
 
-  // Errores creados con httpError().
+  // Otros 4xx de Express o del parser (charset, compresión, parámetros mal codificados).
   if (err.status >= 400 && err.status < 500) {
-    return res.status(err.status).json({ error: err.message });
+    return res.status(err.status).json({ error: 'Petición inválida' });
   }
 
   console.error(err.stack || err);

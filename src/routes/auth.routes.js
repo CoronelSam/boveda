@@ -1,7 +1,9 @@
 const { Router } = require('express');
+const { registro, login } = require('../controllers/auth.controller');
 
 const router = Router();
 
-// Fase 1 (agente de Auth): POST /registro y POST /login.
+router.post('/registro', registro);
+router.post('/login', login);
 
 module.exports = router;
