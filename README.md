@@ -172,21 +172,9 @@ mysql -u boveda -p boveda -e "DELETE FROM usuarios WHERE email LIKE '%@prueba.lo
 
 Los secretos de prueba se borran desde Atlas: en *Browse Collections*, abre `boveda.secretos`, filtra con `{ "titulo": { "$regex": "^PRUEBA " } }` y elimina los resultados.
 
-### 2. Compartir la URL
+### 2. Crear la cuenta para el equipo atacante
 
-El servidor ya escucha en `0.0.0.0`. Comparte `http://<IP-LAN>:3001`. En macOS, la IP se obtiene con:
-
-```bash
-ipconfig getifaddr en0
-```
-
-O bien abre un túnel:
-
-```bash
-cloudflared tunnel --url http://localhost:3001
-```
-
-### 3. Crear la cuenta para el equipo atacante
+No entregues todavía la URL: si el atacante la tiene antes de que exista el secreto, puede registrar cuentas que sí contarían para el quórum.
 
 Cambia el email y la clave por los que vayas a entregarles:
 
@@ -194,7 +182,7 @@ Cambia el email y la clave por los que vayas a entregarles:
 curl -X POST http://localhost:3001/auth/registro -H "Content-Type: application/json" -d '{"nombre":"Equipo atacante","email":"atacante@ejemplo.com","password":"cambia-esta-clave"}'
 ```
 
-### 4. Crear el secreto con otra cuenta
+### 3. Crear el secreto con otra cuenta
 
 Registra la cuenta que será dueña del secreto:
 
@@ -212,6 +200,22 @@ Crea el secreto con ese token, sin `fechaApertura`, para que no se pueda abrir p
 
 ```bash
 curl -X POST http://localhost:3001/secretos -H "Content-Type: application/json" -H "Authorization: Bearer <token>" -d '{"titulo":"Expediente","contenido":"¡Nos robaron!"}'
+```
+
+### 4. Entregar la URL y la cuenta de prueba
+
+Con el secreto ya creado, entrega al otro equipo la cuenta del paso 2 y la URL. Cualquier cuenta que registren a partir de aquí no cuenta para el quórum.
+
+El servidor ya escucha en `0.0.0.0`, así que la URL es `http://<IP-LAN>:3001`. En macOS, la IP se obtiene con:
+
+```bash
+ipconfig getifaddr en0
+```
+
+O bien abre un túnel:
+
+```bash
+cloudflared tunnel --url http://localhost:3001
 ```
 
 ### 5. Durante el atraco
